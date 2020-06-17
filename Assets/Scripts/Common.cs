@@ -52,6 +52,15 @@ public class UniformCircle
     //}
 }
 
+class MyTri {
+    public Vector2 center = Vector2.zero;
+    public float area = 0;
+    public MyTri(Vector2 _center, float _area)
+    {
+        center = _center;
+        area = _area;
+    }
+};
 public class VPLUtil{
     // 如果有做位移 radius要乘2 !!!!!!!!!!!!
     static public List<Vector2> recalculateVPL(List<Vector2> localSps, float radius, bool doOffset, out int updateIndex, out List<bool> removeIndex)
@@ -164,6 +173,121 @@ public class VPLUtil{
         }
     }
 
+    // 如果有做位移 radius要乘2 !!!!!!!!!!!!
+    static public List<Vector2> recalculateVPL(List<Vector2> localSps, float radius, bool doOffset, int samples, out List<int> updateIndex)
+    {
+        //float maxDisToRemove = radius / localSps.Count;
+        float maxDisToRemove = float.MaxValue;
+
+        if (doOffset)
+            radius *= 2;
+
+        Voronoi v = new Voronoi(localSps, null, new Rect(0, 0, radius, radius), out List<bool> removeIndex);
+
+        List<Edge> edges = v._edges;
+        int shotestEdgeIndex = -1;
+        // for remove
+        float minDis = maxDisToRemove;
+        for (int i = 0; i < edges.Count; i++)
+        {
+            Edge edge = edges[i];
+            float dis = edge.SitesDistance();
+            if (dis < minDis)
+            {
+                minDis = dis;
+                shotestEdgeIndex = i;
+            }
+        }
+
+        List<int> emptyIndex = new List<int>();
+        for (int i = 0; i < removeIndex.Count; i++) 
+        {
+            if (removeIndex[i])
+                emptyIndex.Add(i);
+        }
+        for (int i = 0; i < samples; i++)
+        {
+            emptyIndex.Add(localSps.Count + i);
+        }
+        if (shotestEdgeIndex != -1)
+        {
+            Edge edge = edges[shotestEdgeIndex];
+            // 1 left / 2 right
+            int shortestIndex = -1;
+            minDis = float.MaxValue;
+            for (int i = 0; i < edge.rightSite.edges.Count; i++)
+            {
+                if (Edge.isSameEdge(edge, edge.rightSite.edges[i]))
+                    continue;
+                float dis = edge.rightSite.edges[i].SitesDistance();
+                if (dis < minDis)
+                {
+                    minDis = dis;
+                    shortestIndex = 1;
+                }
+            }
+            for (int i = 0; i < edge.leftSite.edges.Count; i++)
+            {
+                if (Edge.isSameEdge(edge, edge.leftSite.edges[i]))
+                    continue;
+                float dis = edge.leftSite.edges[i].SitesDistance();
+                if (dis < minDis)
+                {
+                    minDis = dis;
+                    shortestIndex = 2;
+                }
+            }
+
+            if (shortestIndex == 1)
+            {
+                shortestIndex = (int)edge.rightSite._siteIndex;
+            }
+            else
+            {
+                shortestIndex = (int)edge.leftSite._siteIndex;
+            }
+            // 
+            shotestEdgeIndex = shortestIndex;
+            emptyIndex.Add(shortestIndex);
+        }
+
+        emptyIndex.Sort((a, b)=>a.CompareTo(b));
+        updateIndex = new List<int>(emptyIndex);
+        if (emptyIndex.Count != 0)
+        {
+            List<MyTri> maxAreaTriangles = new List<MyTri>();
+
+            List<Triangle> triangles = v._triangles;
+            for (int i = 0; i < triangles.Count; i++)
+            {
+                Triangle tri = triangles[i];
+                Vector2 tmpVPL = triangles[i].CircumcircleCenter(out bool isReal);
+                if (!isReal)
+                    continue;
+                maxAreaTriangles.Add(new MyTri(tmpVPL, tri.Area()));
+            }
+
+            maxAreaTriangles.Sort((t1, t2) => t2.area.CompareTo(t1.area));
+
+            List<Site> siteList = v._sites._sites;
+            List<Vector2> newPoint = new List<Vector2>();
+            for (int i = 0; i < siteList.Count; i++) 
+            {
+                newPoint.Add(siteList[i].Coord);
+            }
+            for (int i = 0, j = 0; i < emptyIndex.Count; i++) 
+            {
+                // 不重複丟
+                if (emptyIndex[i] == shotestEdgeIndex)
+                    continue;
+                newPoint.Insert(emptyIndex[i], maxAreaTriangles[j].center);
+                j++;
+            }
+            return newPoint;
+        }
+        return localSps;
+    }
+
     static public List<float> getLightIntensity(List<Vector2> localSp, float radius, bool doOffset)
     {
         if (doOffset)
@@ -202,7 +326,7 @@ public class VPLUtil{
         List<float> intensityList = new List<float>();
         for (int i = 0, j = 0; i < removeIndex.Count; i++) 
         {
-            if (!removeIndex[i])
+            if (removeIndex[i])
             {
                 intensityList.Add(0);
             }

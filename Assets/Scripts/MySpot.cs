@@ -128,7 +128,7 @@ public class MySpot : MonoBehaviour
         Destroy(obj);
     }
 
-    void generateNewLight(Vector2 localPos)
+    bool generateNewLight(Vector2 localPos)
     {
         GameObject tmp = GameObject.Instantiate(preLight);
         // surfacePoints.Add(surfacePoint);
@@ -136,10 +136,12 @@ public class MySpot : MonoBehaviour
         {
             pointLightObjects.Add(tmp);
             pointLights[tmp] = tmp.transform.GetComponent<Light>();
+            return true;
         }
         else
         {
             Destroy(tmp);
+            return false;
         }
     }
 
@@ -155,42 +157,36 @@ public class MySpot : MonoBehaviour
 
     void UpdatePointLight()
     {
+        // 檢查並刪除不合法光
         CheckValid();
-        int updateIndex = -1;
         List<Vector2> posList2D = LightPosTo2DSpace();
-        //紀錄是否被成功加入
-        List<bool> removeIndex = new List<bool>();
-        List<Vector2> localSp = VPLUtil.recalculateVPL(posList2D, radius, doOffset, out updateIndex, out removeIndex);
+        List<Vector2> localSp = VPLUtil.recalculateVPL(posList2D, radius, doOffset, vplSzie - pointLightObjects.Count, out List<int> updateIndex);
 
-        int oft = 0;
-        for (int i = 0; i < removeIndex.Count; i++) 
+        //print("A  " + updateIndex.Count + "   " + pointLightObjects.Count + " " + pointLights.Count + " " + localSp.Count);
+        if (updateIndex.Count != 0)
         {
-            if (!removeIndex[i])
+            int offset = 0;
+            foreach (int index in updateIndex)
             {
-                removeLight(i - oft);
-                oft++;
+                int ind = index - offset;
+                print(ind);
+                if (ind >= pointLightObjects.Count)
+                {
+                    if (!generateNewLight(localSp[ind]))
+                    {
+                        localSp.RemoveAt(ind);
+                        offset++;
+                    }
+                }
+                else if (!updateObjectPotition(pointLightObjects[ind], transform.position, localSp[ind], false))
+                {
+                    removeLight(ind);
+                    localSp.RemoveAt(ind);
+                    offset++;
+                }
             }
         }
-        // updateLightObjectAndRemove(localSp, updateIndex);
-        if (updateIndex != -1)
-        {
-            //print("AAA    " + pointLightObjects[updateIndex].transform.position);
-            if(!updateObjectPotition(pointLightObjects[updateIndex], transform.position, localSp[updateIndex], false))
-            {
-                removeLight(updateIndex);
-                localSp.RemoveAt(updateIndex);
-            }
-            //print("BBB    " + pointLightObjects[updateIndex].transform.position);
-        }
-
-        List<Vector2> newVP = UniformCircle.calculatePoint(radius, vplSzie - pointLightObjects.Count, doOffset, true);
-        foreach (Vector2 item in newVP)
-        {
-            localSp.Add(item);
-            generateNewLight(item);
-        }
-
-        // print(updateIndex + "   " + pointLightObjects.Count + " " + pointLights.Count + " " + localSp.Count);
+        //print("B  " + updateIndex.Count + "   " + pointLightObjects.Count + " " + pointLights.Count + " " + localSp.Count);
         List<float> intensity = VPLUtil.getLightIntensity(localSp, radius, doOffset);
         if (intensity != null)
         {

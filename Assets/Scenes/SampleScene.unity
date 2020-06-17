@@ -823,7 +823,7 @@ MonoBehaviour:
   lightType: 1
   radius: 10
   minVPLSize: 50
-  vplSzie: 256
+  vplSzie: 128
   intensityScale: 10
   preLight: {fileID: 2321825769204041060, guid: 34b082fd383fd4044bfca652f40a10cf,
     type: 3}

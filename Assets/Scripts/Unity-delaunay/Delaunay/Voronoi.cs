@@ -98,7 +98,7 @@ namespace Delaunay
             int length = points.Count;
             for (int i = 0; i < length; ++i)
             {
-                removeIndex.Add(AddSite(points[i], (colors != null) ? colors[i] : 0, i));
+                removeIndex.Add(!AddSite(points[i], (colors != null) ? colors[i] : 0, i));
             }
         }
 
