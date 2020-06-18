@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class FakeManager : MonoBehaviour
 {
@@ -13,7 +14,12 @@ public class FakeManager : MonoBehaviour
     }
     public void LoadSibe()
     {
-        GameObject.Instantiate(sibenik);
+        SceneManager.LoadScene(1, LoadSceneMode.Additive);
+        //GameObject.Instantiate(sibenik);
+        //mySpot.Initialize();
+    }
+    public void LightInitialize()
+    {
         mySpot.Initialize();
     }
 }

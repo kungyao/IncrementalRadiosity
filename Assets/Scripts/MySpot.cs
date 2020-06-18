@@ -16,6 +16,7 @@ public class MySpot : MonoBehaviour
     public float radius = 10;
     public int minVPLSize = 50;
     public int vplSzie = 256;
+    public int resampleVPLs = 10;
     public float intensityScale = 10f;
     public GameObject preLight;
 
@@ -29,13 +30,20 @@ public class MySpot : MonoBehaviour
     private List<Vector3> realPointPos = new List<Vector3>();
     private List<GameObject> pointLightObjects = new List<GameObject>();
     private Dictionary<GameObject, Light> pointLights = new Dictionary<GameObject, Light>();
-    private List<Vector3> surfacePoints = new List<Vector3>();
 
     private bool isInit = false;
     public void Initialize()
     {
         if (preLight)
         {
+            realPointPos = new List<Vector3>();
+            if(pointLightObjects != null)
+            {
+                foreach (GameObject obj in pointLightObjects)
+                    Destroy(obj);
+                pointLightObjects = new List<GameObject>();
+            }
+            pointLights = new Dictionary<GameObject, Light>();
             Vector3 normal = transform.forward;
             List<Vector2> localSp = UniformCircle.calculatePoint(radius, vplSzie, doOffset, true);
             for (int i = 0; i < vplSzie; i++)
@@ -160,7 +168,7 @@ public class MySpot : MonoBehaviour
         // 檢查並刪除不合法光
         CheckValid();
         List<Vector2> posList2D = LightPosTo2DSpace();
-        List<Vector2> localSp = VPLUtil.recalculateVPL(posList2D, radius, doOffset, vplSzie - pointLightObjects.Count, out List<int> updateIndex);
+        List<Vector2> localSp = VPLUtil.recalculateVPL(posList2D, radius, doOffset, vplSzie - pointLightObjects.Count, resampleVPLs, out List<int> updateIndex);
 
         //print("A  " + updateIndex.Count + "   " + pointLightObjects.Count + " " + pointLights.Count + " " + localSp.Count);
         if (updateIndex.Count != 0)
@@ -169,7 +177,6 @@ public class MySpot : MonoBehaviour
             foreach (int index in updateIndex)
             {
                 int ind = index - offset;
-                print(ind);
                 if (ind >= pointLightObjects.Count)
                 {
                     if (!generateNewLight(localSp[ind]))
@@ -263,9 +270,9 @@ public class MySpot : MonoBehaviour
         //    vvv.Add(tri.sites[1].Coord);
         //    vvv.Add(tri.sites[2].Coord);
         //    Polygon area = new Polygon(vvv);
-        //    print(area.Area());
+        //    //print(area.Area());
         //}
-        //surfacePoints.Clear();
+        //List<Vector3> surfacePoints = new List<Vector3>();
         //Vector3 normal = transform.forward;
         //foreach (Vector2 item in posList2D)
         //{
@@ -273,7 +280,7 @@ public class MySpot : MonoBehaviour
         //}
         //foreach (Vector3 item in surfacePoints)
         //{
-        //    print(item);
+        //    //print(item);
         //    Gizmos.DrawLine(transform.position, item);
         //}
     }
