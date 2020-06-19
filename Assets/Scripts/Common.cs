@@ -43,7 +43,7 @@ public class UniformCircle
         }
         return result;
     }
-    static public List<Vector2> HaltonGenerator(int samples, int basex = 0, int basey = 0)
+    static public List<Vector2> HaltonGenerator(float radius, int samples, bool doOffset, int basex = 0, int basey = 0)
     {
         List<Vector2> points = new List<Vector2>();
         // 2, 3 Halton Sequence by default
@@ -52,12 +52,17 @@ public class UniformCircle
         if (basey == 0)
             basey = 3;
         int index = 20;
+        float diameter = radius * 2;
         for (int i = 0; i < samples; i++)
         {
-            Vector2 p = new Vector2(Halton(index, basex) * 2 - 1, Halton(index, basey) * 2 - 1);
-            if (p.magnitude < 1.0f)
+            Vector2 p = new Vector2(Halton(index, basex) * diameter - radius, Halton(index, basey) * diameter - radius);
+            if (p.magnitude < radius)
+            {
+                if (doOffset)
+                    p = p + Vector2.one * radius;
                 points.Add(p);
-            else 
+            }
+            else
                 i--;
             index++;
         }
@@ -217,6 +222,7 @@ public class VPLUtil{
         emptyIndex.Sort((a, b) => a.CompareTo(b));
 
         List<int> resampleIndex = new List<int>();
+        resamples = resamples - samples;
         if (resamples > 0)
         {
             List<Edge> edges = v._edges;

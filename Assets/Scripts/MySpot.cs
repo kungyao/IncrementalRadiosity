@@ -11,10 +11,34 @@ public class MySpot : MonoBehaviour
         PointType = 0, 
         SpotType = 1,
     }
+    public class LightPath
+    {
+        public List<Vector3> hitPos = new List<Vector3>();
+        public Vector3 this[int index]
+        {
+            get
+            {
+                if (index >= hitPos.Count || index < 0) 
+                {
+                    print("Index Out Of Range!");
+                    return Vector3.zero;
+                }
+
+                return hitPos[index];
+            }
+        }
+
+
+        public Vector3 Last()
+        {
+            if (hitPos.Count == 0)
+                return Vector3.zero;
+            return hitPos[hitPos.Count - 1];
+        }
+    };
 
     public LightType lightType;
     public float radius = 10;
-    public int minVPLSize = 50;
     public int vplSzie = 256;
     public int resampleVPLs = 10;
     public float intensityScale = 10f;
@@ -45,7 +69,9 @@ public class MySpot : MonoBehaviour
             }
             pointLights = new Dictionary<GameObject, Light>();
             Vector3 normal = transform.forward;
-            List<Vector2> localSp = UniformCircle.calculatePoint(radius, vplSzie, doOffset, true);
+            //List<Vector2> localSp = UniformCircle.calculatePoint(radius, vplSzie, doOffset, true);
+            // 已經offset
+            List<Vector2> localSp = UniformCircle.HaltonGenerator(radius, vplSzie, doOffset);
             for (int i = 0; i < vplSzie; i++)
             {
                 generateNewLight(localSp[i]);
