@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Delaunay;
 using Delaunay.Geo;
+// using System.Numerics;
 
 public class MySpot : MonoBehaviour
 {
@@ -13,27 +14,71 @@ public class MySpot : MonoBehaviour
     }
     public class LightPath
     {
-        public List<Vector3> hitPos = new List<Vector3>();
-        public Vector3 this[int index]
+        public enum Type {
+            None = 0,
+            Reflection = 1,
+            Refraction = 2,
+        }
+        public class HitPoint
+        {
+            public Vector3 pos = Vector3.zero;
+            public Type type = Type.None;
+            public HitPoint(Vector3 p, Type t)
+            {
+                pos = p;
+                type = t;
+            }
+        };
+        public List<HitPoint> hit = new List<HitPoint>();
+        public HitPoint Front
         {
             get
             {
-                if (index >= hitPos.Count || index < 0) 
-                {
-                    print("Index Out Of Range!");
-                    return Vector3.zero;
-                }
-
-                return hitPos[index];
+                if (hit.Count == 0)
+                    return null;
+                return hit[0];
             }
         }
-
-
-        public Vector3 Last()
+        public HitPoint Back
         {
-            if (hitPos.Count == 0)
-                return Vector3.zero;
-            return hitPos[hitPos.Count - 1];
+            get
+            {
+                if (hit.Count == 0)
+                    return null;
+                return hit[hit.Count - 1];
+            }
+        }
+        public int Size
+        {
+            get
+            {
+                return hit.Count;
+            }
+        }
+        public HitPoint this[int index]
+        {
+            get
+            {
+                if (index >= hit.Count || index < 0) 
+                {
+                    print("Index Out Of Range!");
+                    return null;
+                }
+
+                return hit[index];
+            }
+        }
+        public LightPath(Vector3 firstHit)
+        {
+            hit.Add(new HitPoint(firstHit, Type.None));
+        }
+        public void Add(Vector3 p, Type t)
+        {
+            hit.Add(new HitPoint(p, t));
+        }
+        public void Clear()
+        {
+            hit.Clear();
         }
     };
 
@@ -51,7 +96,7 @@ public class MySpot : MonoBehaviour
     public float rotateAngle = 10.0f;
 
     public float visualLightScale = 1.5f;
-    private List<Vector3> realPointPos = new List<Vector3>();
+    private List<LightPath> realPointPos = new List<LightPath>();
     private List<GameObject> pointLightObjects = new List<GameObject>();
     private Dictionary<GameObject, Light> pointLights = new Dictionary<GameObject, Light>();
 
@@ -60,7 +105,7 @@ public class MySpot : MonoBehaviour
     {
         if (preLight)
         {
-            realPointPos = new List<Vector3>();
+            realPointPos = new List<LightPath>();
             if(pointLightObjects != null)
             {
                 foreach (GameObject obj in pointLightObjects)
@@ -107,7 +152,7 @@ public class MySpot : MonoBehaviour
     bool CheckValid(int index)
     {
         // GameObject obj = pointLightObjects[index];
-        Vector3 objPos = realPointPos[index];
+        Vector3 objPos = realPointPos[index].Front.pos;
         Vector3 rayOriToLight = objPos - transform.position;
         if (Vector3.Dot(transform.forward, rayOriToLight) <= 0)
             return false;
@@ -130,21 +175,67 @@ public class MySpot : MonoBehaviour
             }
         }
     }
-
-    bool updateObjectPotition(GameObject obj, Vector3 ori, Vector2 localPos, bool isNew)
+    /**
+     * @param normal    previous hit normal
+     * @param pos       previous hit pos
+     * @param type      previous hit material (reflection or refraction)
+     */
+    Vector3 updateObjectPotition_sup(Vector3 viewDir, Vector3 normal, Vector3 pos, LightPath.Type type, LightPath path)
     {
-        RaycastHit hit;
+        Vector3 o = Vector3.zero;
+        if (type == LightPath.Type.Reflection) o = RotationFromNormal.VectorRotateAroundAxis(-viewDir, normal, 180);
+        else if (type == LightPath.Type.Refraction) o = RotationFromNormal.RefractRayDirection(viewDir, normal, 0.6666f, RotationFromNormal.Space.AirTo);
+        if (Physics.Raycast(pos, o, out RaycastHit hit, 1000))
+        {
+            LightPath.Type tp = LightPath.Type.None;
+            if (hit.transform.tag == "ReflectionMaterial")
+            {
+                tp = LightPath.Type.Reflection;
+            }
+            else if (hit.transform.tag == "RefractionMaterial")
+            {
+                tp = LightPath.Type.Refraction;
+            }
+            Vector3 finalLightPos = hit.point - rayOffset * viewDir;
+            path.Add(finalLightPos, tp);
+            if (tp != LightPath.Type.None)
+            {
+                return updateObjectPotition_sup(o, hit.normal, finalLightPos, tp, path);
+            }
+            return finalLightPos;
+        }
+        Debug.Log("Reflection/Refraction ray do not hit anything !");
+        return pos - rayOffset * viewDir;
+    }
+    bool updateObjectPotition(GameObject obj, Vector3 ori, Vector2 localPos, bool isNew, int index = -1)
+    {
         Vector3 normal = transform.forward;
         Vector3 surfacePoint = ToCircleSurface(localPos, normal, radius);
         Vector3 rayDir = surfacePoint - transform.position;
-        if (Physics.Raycast(ori, rayDir, out hit, 1000))
+        if (Physics.Raycast(ori, rayDir, out RaycastHit hit, 1000))
         {
-            ori = hit.point - rayOffset * rayDir;
-            obj.transform.position = ori;
+            Vector3 finalLightPos = hit.point - rayOffset * rayDir;
+            LightPath lightPath = null;
             if (isNew)
             {
-                realPointPos.Add(hit.point);
+                lightPath = new LightPath(finalLightPos);
+                realPointPos.Add(lightPath);
             }
+            else
+            {
+                lightPath = realPointPos[index];
+                lightPath.Clear();
+                lightPath.Add(finalLightPos, LightPath.Type.None);
+            }
+            if (hit.transform.tag == "ReflectionMaterial")
+            {
+                finalLightPos = updateObjectPotition_sup(rayDir, hit.normal, hit.point, LightPath.Type.Reflection, lightPath);
+            }
+            else if (hit.transform.tag == "RefractionMaterial")
+            {
+                finalLightPos = updateObjectPotition_sup(rayDir, hit.normal, hit.point, LightPath.Type.Refraction, lightPath);
+            }
+            obj.transform.position = finalLightPos;
             return true;
         }
         else
@@ -182,9 +273,9 @@ public class MySpot : MonoBehaviour
     List<Vector2> LightPosTo2DSpace()
     {
         List<Vector2> spcae2Dpos = new List<Vector2>();
-        for (int i = 0; i < pointLightObjects.Count; i++)
+        for (int i = 0; i < realPointPos.Count; i++)
         {
-            spcae2Dpos.Add(To2DDomain(pointLightObjects[i].transform.position, radius));
+            spcae2Dpos.Add(To2DDomain(realPointPos[i].Front.pos, radius));
         }
         return spcae2Dpos;
     }
@@ -211,7 +302,7 @@ public class MySpot : MonoBehaviour
                         offset++;
                     }
                 }
-                else if (!updateObjectPotition(pointLightObjects[ind], transform.position, localSp[ind], false))
+                else if (!updateObjectPotition(pointLightObjects[ind], transform.position, localSp[ind], false, ind))
                 {
                     removeLight(ind);
                     localSp.RemoveAt(ind);
@@ -252,9 +343,28 @@ public class MySpot : MonoBehaviour
 
     private void OnDrawGizmos()
     {
-        foreach (Vector3 pos in realPointPos)
+        Gizmos.color = Color.white;
+        foreach (LightPath path in realPointPos)
         {
-            Gizmos.DrawWireSphere(pos, visualLightScale);
+            for(int i = 0; i < path.Size; i++)
+            {
+                if (i != 0)
+                {
+                    // set color
+                    if (path[i].type == LightPath.Type.Reflection)
+                    {
+                        Gizmos.color = Color.blue;
+                    }
+                    else if (path[i].type == LightPath.Type.Refraction)
+                    {
+                        Gizmos.color = Color.red;
+                    }
+                    Gizmos.DrawLine(path[i - 1].pos, path[i].pos);
+                    Gizmos.color = Color.white;
+                }
+                // draw hit point
+                Gizmos.DrawWireSphere(path[i].pos, visualLightScale);
+            }
         }
         //List<Vector2> posList2D = LightPosTo2DSpace();
 
