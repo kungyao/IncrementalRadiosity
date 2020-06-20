@@ -187,6 +187,7 @@ public class MySpot : MonoBehaviour
         else if (type == LightPath.Type.Refraction) o = RotationFromNormal.RefractRayDirection(viewDir, normal, 0.6666f, RotationFromNormal.Space.AirTo);
         if (Physics.Raycast(pos, o, out RaycastHit hit, 1000))
         {
+            path.Add(hit.point, type);
             LightPath.Type tp = LightPath.Type.None;
             if (hit.transform.tag == "ReflectionMaterial")
             {
@@ -196,13 +197,11 @@ public class MySpot : MonoBehaviour
             {
                 tp = LightPath.Type.Refraction;
             }
-            Vector3 finalLightPos = hit.point - rayOffset * viewDir;
-            path.Add(finalLightPos, tp);
             if (tp != LightPath.Type.None)
             {
-                return updateObjectPotition_sup(o, hit.normal, finalLightPos, tp, path);
+                return updateObjectPotition_sup(o, hit.normal, hit.point, tp, path);
             }
-            return finalLightPos;
+            return hit.point - rayOffset * viewDir;
         }
         Debug.Log("Reflection/Refraction ray do not hit anything !");
         return pos - rayOffset * viewDir;
@@ -214,19 +213,19 @@ public class MySpot : MonoBehaviour
         Vector3 rayDir = surfacePoint - transform.position;
         if (Physics.Raycast(ori, rayDir, out RaycastHit hit, 1000))
         {
-            Vector3 finalLightPos = hit.point - rayOffset * rayDir;
             LightPath lightPath = null;
             if (isNew)
             {
-                lightPath = new LightPath(finalLightPos);
+                lightPath = new LightPath(hit.point);
                 realPointPos.Add(lightPath);
             }
             else
             {
                 lightPath = realPointPos[index];
                 lightPath.Clear();
-                lightPath.Add(finalLightPos, LightPath.Type.None);
+                lightPath.Add(hit.point, LightPath.Type.None);
             }
+            Vector3 finalLightPos = hit.point - rayOffset * rayDir;
             if (hit.transform.tag == "ReflectionMaterial")
             {
                 finalLightPos = updateObjectPotition_sup(rayDir, hit.normal, hit.point, LightPath.Type.Reflection, lightPath);
